@@ -27,6 +27,8 @@ Configure this controller to set some custom behaviors.
 
   - `lazy` - If `false`, this controller will be bootstrapped when the app starts. Defaults to `true`.
 
+  - `strategy` - Set the bootstrap behavior for this controller if lazy mode is `true`.
+
   - `enableLogging` - Whether to print detailed verbose logs or not. Defaults to `false`.
 ```dart
     Momentum(
@@ -35,6 +37,7 @@ Configure this controller to set some custom behaviors.
         ExampleControllerA()..config(
           maxTimeTravelSteps: 30, // maximum of 30 undo/redo steps.
           lazy: false, // bootstrap this controller when the app starts.
+          strategy: BootstrapStrategy.lazyFirstCall, // This controller will bootstrap on first "Momentum.controller<ExampleControllerA>(context)" call.
           enableLogging: true, // print verbose logs.
         ),
         ExampleControllerB()..config(lazy: false),
@@ -154,6 +157,13 @@ class ExampleController extends MomentumController<ExampleModel> {
   // ...
 }
 ```
+If you are using the new `InjectService` to add your services. You can also use the `alias` parameter to get a specific service with matching alias.
+```dart
+var apiService = getService<ApiService>(alias: ApiAlias.logsEnabled);
+```
+`alias` is dynamic type which means you can use any values here as long as it matches with the one you want to grab. It is highly recommended to use an `enum`.
+
+Refer to the full documentation for `InjectService` [here](https://xamdev.gq/momentum/#/inject_service).
 
 <hr>
 

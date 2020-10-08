@@ -48,3 +48,34 @@ class AuthController extends MomentumController<AuthModel> {
 ```
 
 !> Head to this [section](/momentum?id=services) to know how to set up a service.
+
+<hr>
+
+## .getService\<T\>()
+- Category: `Method`
+- Type: `T` extends `MomentumService`
+
+Dependency injection between services. Get a specific service from inside another service.
+
+```dart
+class ServiceA extends MomentumService {
+  int increment(int value) => value + 1;
+
+  double times2(double value) {
+    var serviceB = getService<ServiceB>();
+    return serviceB.times2(value);
+  }
+}
+
+class ServiceB extends MomentumService {
+  double times2(double value) => value * 2;
+}
+```
+
+If you are using the new `InjectService` to add your services. You can also use the `alias` parameter to get a specific service with matching alias.
+```dart
+var serviceB = getService<ServiceB>(alias: ServiceAlias.noLogs);
+```
+`alias` is dynamic type which means you can use any values here as long as it matches with the one you want to grab. It is highly recommended to use an `enum`.
+
+Refer to the full documentation for `InjectService` [here](https://xamdev.gq/momentum/#/inject_service).

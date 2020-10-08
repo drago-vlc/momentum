@@ -2,14 +2,40 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
+
+import '../momentum.dart';
 import 'in_memory_storage.dart';
 import 'momentum_error.dart';
 import 'momentum_event.dart';
 import 'momentum_router.dart';
-
 import 'momentum_types.dart';
 
 Type _getType<T>() => T;
+
+/// Set the bootstrap behavior for controllers if lazy mode is `true`.
+enum BootstrapStrategy {
+  /// *(default)*. Bootstrap will be called on first
+  /// `MomentumBuilder` usage of a controller if lazy mode is `true`.
+  lazyFirstBuild,
+
+  /// Bootstrap will be called on first `Momentum.controller<T>(context)`
+  /// call if `lazy` mode is `true`.
+  ///
+  /// ```dart
+  /// var someController = Momentum.controller<SomeController>(context); // will bootstrap.
+  ///
+  /// // in other widget ...
+  /// var someController = Momentum.controller<SomeController>(context); // will NOT bootstrap.
+  /// ```
+  lazyFirstCall,
+}
+
+MomentumError _invalidService = const MomentumError(
+  'You are not allowed to grab '
+  '"InjectService" directly. You might have done one of these:\n'
+  '1. Momentum.service<InjectService>(...)\n'
+  '2. getService<InjectService>(...)',
+);
 
 /// Used internally.
 /// Simplify trycatch blocks.
@@ -52,6 +78,33 @@ class _MomentumListener<M> {
   _MomentumListener({@required this.state, @required this.invoke});
 }
 
+/// A mixin for [MomentumController] that adds the capability to
+/// handle route changes from momentum's built-in routing system.
+mixin RouterMixin on _ControllerBase {
+  /// Get the current route parameters specified using
+  /// the `params` parameter in `Router.goto(...)` method.
+  ///
+  /// ### Example:
+  /// ```dart
+  /// // setting the route params.
+  /// Router.goto(context, DashboardPage, params: DashboardParams(...));
+  ///
+  /// // accessing the route params inside widgets.
+  /// var params = Router.getParam<DashboardParams>(context);
+  ///
+  /// // accessing the route params inside controllers.
+  /// var params = getParam<DashboardParams>();
+  /// ```
+  T getParam<T extends RouterParam>() {
+    var result = Router.getParam<T>(_mRootContext);
+    return result;
+  }
+
+  /// A callback whenever [Router.goto] or [Router.pop] is called.
+  /// The [RouterParam] is also provided.
+  void onRouteChanged(RouterParam param) {}
+}
+
 /// The class which holds the state of your app.
 /// This is tied with [MomentumController].
 @immutable
@@ -89,11 +142,13 @@ abstract class MomentumModel<Controller extends MomentumController> {
   Map<String, dynamic> toJson() => null;
 }
 
+mixin _ControllerBase {
+  BuildContext _mRootContext;
+}
+
 /// The class which holds the logic for your app.
 /// This is tied with [MomentumModel].
-abstract class MomentumController<M> {
-  BuildContext _mRootContext;
-
+abstract class MomentumController<M> with _ControllerBase {
   /// Dependency injection method for getting other controllers.
   /// Useful for accessing other controllers' function
   /// and model properties without dragging the widget context around.
@@ -118,9 +173,9 @@ abstract class MomentumController<M> {
   /// A method for getting a service marked with
   /// [MomentumService] that are injected into
   /// [Momentum] root widget.
-  T getService<T extends MomentumService>() {
+  T getService<T extends MomentumService>({dynamic alias}) {
     try {
-      var result = Momentum.getService<T>(_mRootContext);
+      var result = Momentum.service<T>(_mRootContext, alias: alias);
       return result;
     } on dynamic catch (e) {
       if (_momentumLogging) {
@@ -574,13 +629,12 @@ abstract class MomentumController<M> {
     @required MomentumState state,
     @required void Function(T data) invoke,
   }) {
-    _eventHandlers.add(
-      state._eventHandler
-        ..add<T>().listen((data) {
-          invoke(data);
-          _lastEventReceived = data;
-        }),
-    );
+    var newHandler = MomentumEvent<T>(state);
+    newHandler.on().listen((data) {
+      invoke(data);
+      _lastEventReceived = data;
+    });
+    _eventHandlers.add(newHandler);
   }
 
   /// Send event data to all listeners of data type `T`.
@@ -588,9 +642,13 @@ abstract class MomentumController<M> {
   /// This should be used for notifying the widgets to show
   /// dialogs/snackbars/toast/alerts/etc.
   void sendEvent<T>(T data) {
-    _eventHandlers.removeWhere((x) => x.streamController.isClosed);
-    for (var event in _eventHandlers) {
-      event.trigger(data);
+    _eventHandlers.removeWhere(
+      (x) => x.streamController.isClosed || !x.state.mounted,
+    );
+    // ignore: prefer_iterable_wheretype
+    var targetHandlers = _eventHandlers.where((x) => x is MomentumEvent<T>);
+    for (var event in targetHandlers) {
+      (event as MomentumEvent<T>).trigger(data);
     }
   }
 
@@ -646,17 +704,38 @@ abstract class MomentumController<M> {
   bool get isLazy => _lazy;
   bool _configMethodCalled = false;
 
+  /// The bootstrap behavior for controllers if lazy is `true`.
+  ///
+  /// #### lazyFirstBuild
+  /// *(default)*. Bootstrap will be called on first
+  /// `MomentumBuilder` usage of a controller.
+  ///
+  /// #### lazyFirstCall
+  /// Bootstrap will be called on first
+  /// `Momentum.controller<T>(context)` call.
+  ///
+  /// ```dart
+  /// var someController = Momentum.controller<SomeController>(context); // will bootstrap.
+  ///
+  /// // in other widget ...
+  /// var someController = Momentum.controller<SomeController>(context); // will NOT bootstrap.
+  /// ```
+  BootstrapStrategy get strategy => _strategy;
+  BootstrapStrategy _strategy;
+
   /// Configure this controller to set some custom behaviors.
   void config({
     bool enableLogging,
     int maxTimeTravelSteps,
     bool lazy,
+    BootstrapStrategy strategy,
   }) {
     if (!_configMethodCalled) {
       _configMethodCalled = true;
       _momentumLogging = enableLogging;
       _maxTimeTravelSteps = maxTimeTravelSteps?.clamp(1, 250);
       _lazy = lazy;
+      _strategy = strategy;
     }
   }
 
@@ -665,11 +744,13 @@ abstract class MomentumController<M> {
     bool enableLogging,
     int maxTimeTravelSteps,
     bool lazy,
+    BootstrapStrategy strategy,
   }) {
     _disablePersistentState = disabledPersistentState ?? false;
     _momentumLogging ??= enableLogging ?? false;
     _maxTimeTravelSteps ??= (maxTimeTravelSteps ?? 1).clamp(1, 250);
     _lazy ??= lazy ?? true;
+    _strategy ??= strategy ?? BootstrapStrategy.lazyFirstBuild;
   }
 
   String _formatMomentumLog(String log) {
@@ -681,12 +762,37 @@ abstract class MomentumController<M> {
 /// to inject them into the `services` parameter
 /// of [Momentum] root widget and use them
 /// down the tree.
-abstract class MomentumService {}
+abstract class MomentumService {
+  BuildContext _context;
+
+  /// A method for getting a service marked with
+  /// [MomentumService] that are injected into
+  /// [Momentum] root widget.
+  T getService<T extends MomentumService>({dynamic alias}) {
+    var momentum = Momentum._getMomentumInstance(_context);
+    return momentum._getService<T>(alias: alias);
+  }
+}
+
+/// Use this class to inject multiple services of the
+/// same type with different configurations using alias.
+class InjectService<S extends MomentumService> extends MomentumService {
+  final dynamic _alias;
+  final S _service;
+
+  /// Use this class to inject multiple services of the
+  /// same type with different configurations using alias.
+  InjectService(
+    dynamic alias,
+    S service,
+  )   : _alias = alias,
+        _service = service;
+}
 
 /// A [State] class with additional properties.
 /// Also allows you to add listeners for controllers.
 abstract class MomentumState<T extends StatefulWidget> extends State<T> {
-  final MomentumEvent _eventHandler = MomentumEvent();
+  MomentumEvent _eventHandler;
   bool _stateDeactivated = false;
 
   /// A property that indicates if the [StatefulWidget] for this [State]
@@ -724,6 +830,7 @@ abstract class MomentumState<T extends StatefulWidget> extends State<T> {
   void didChangeDependencies() {
     if (!___momentumInitialized) {
       ___momentumInitialized = true;
+      _eventHandler = MomentumEvent(this);
       initMomentumState();
     }
     super.didChangeDependencies();
@@ -765,11 +872,11 @@ class MomentumBuilder extends StatefulWidget {
   ])) builder;
 
   /// Create a widget to display your model properties.
-  /// Parameter `controllers` and `builder` is required.
+  /// Parameter `builder` is required.
   const MomentumBuilder({
     Key key,
     this.owner,
-    @required this.controllers,
+    this.controllers,
     @required this.builder,
     this.dontRebuildIf,
   }) : super(key: key);
@@ -822,9 +929,9 @@ class _MomentumBuilderState extends MomentumState<MomentumBuilder> {
       }
     }
     if (ctrls.isNotEmpty) {
-      // _models.addAll(ctrls.map((_) => null));
       for (var i = 0; i < ctrls.length; i++) {
-        if (ctrls[i]._lazy) {
+        var bootstrap = ctrls[i].strategy == BootstrapStrategy.lazyFirstBuild;
+        if (ctrls[i]._lazy && bootstrap) {
           ctrls[i]._bootstrap();
           ctrls[i]._bootstrapAsync();
         }
@@ -943,34 +1050,52 @@ class _MomentumRoot extends StatefulWidget {
   final int maxTimeTravelSteps;
   final bool lazy;
   final int minimumBootstrapTime;
+  final BootstrapStrategy strategy;
   final bool testMode;
 
   const _MomentumRoot({
     Key key,
     @required this.child,
-    this.appLoader,
+    @required this.appLoader,
     @required this.controllers,
     @required this.services,
-    this.disabledPersistentState,
-    this.enableLogging,
-    this.maxTimeTravelSteps,
-    this.lazy,
-    this.minimumBootstrapTime,
-    this.testMode,
+    @required this.disabledPersistentState,
+    @required this.enableLogging,
+    @required this.maxTimeTravelSteps,
+    @required this.lazy,
+    @required this.minimumBootstrapTime,
+    @required this.strategy,
+    @required this.testMode,
   }) : super(key: key);
   @override
   _MomentumRootState createState() => _MomentumRootState();
 }
 
 class _MomentumRootState extends State<_MomentumRoot> {
+  MomentumEvent<RouterSignal> _momentumEvent;
   bool _mErrorFound = false;
+  String _error;
 
   Future<bool> _init() async {
-    await _initControllerModel(widget.controllers);
-    _bootstrapControllers(widget.controllers);
-    await _bootstrapControllersAsync(widget.controllers);
-    await _initServices(widget.services);
-    return true;
+    try {
+      _momentumEvent = MomentumEvent<RouterSignal>(this);
+      await _initServices(widget.services);
+      await _initControllerModel(widget.controllers);
+      _bootstrapControllers(widget.controllers);
+      await _bootstrapControllersAsync(widget.controllers);
+      return true;
+    } on dynamic catch (e, stackTrace) {
+      // Print the stacktrace of the caught exception
+      debugPrint(e?.toString());
+      debugPrint(stackTrace?.toString());
+      // Rethrow it to stop execution. This will be
+      // a FutureBuilder assertion error
+      setState(() {
+        _error = '[Momentum]: Failed to initialize your app. '
+            'Check the above stacktrace for details.';
+      });
+      return false;
+    }
   }
 
   Future<void> _initControllerModel(
@@ -994,14 +1119,24 @@ class _MomentumRootState extends State<_MomentumRoot> {
     var momentum = Momentum._getMomentumInstance(context);
     for (var service in services) {
       if (service != null) {
+        service._context = context;
         if (service is Router) {
+          _momentumEvent.on().listen((event) {
+            for (var controller in widget.controllers) {
+              if (controller is RouterMixin) {
+                (controller as RouterMixin).onRouteChanged(event.param);
+              }
+            }
+          });
           service.setFunctions(
             context,
             momentum._persistSave,
             momentum._persistGet,
             momentum._syncPersistSave,
             momentum._syncPersistGet,
+            _momentumEvent,
           );
+
           if (widget.testMode) {
             service.initSync(testMode: widget.testMode);
           } else {
@@ -1013,12 +1148,12 @@ class _MomentumRootState extends State<_MomentumRoot> {
   }
 
   void _bootstrapControllers(List<MomentumController> controllers) {
-    var lazyControllers = widget.controllers.where((e) {
+    var nonLazyControllers = widget.controllers.where((e) {
       return e != null && !e._lazy;
     });
-    for (var lazyController in lazyControllers) {
-      if (lazyController != null) {
-        lazyController._bootstrap();
+    for (var nonLazyController in nonLazyControllers) {
+      if (nonLazyController != null) {
+        nonLazyController._bootstrap();
       }
     }
   }
@@ -1041,39 +1176,43 @@ class _MomentumRootState extends State<_MomentumRoot> {
 
   @override
   Widget build(BuildContext context) {
-    var error = Momentum._getMomentumInstance(context)._validateControllers(
+    _error ??= Momentum._getMomentumInstance(context)._validateControllers(
       widget.controllers,
     );
-    if (!_mErrorFound && error != null) {
+    _error ??= Momentum._getMomentumInstance(context)._validateInjectService(
+      widget.services,
+    );
+    if (!_mErrorFound && _error != null) {
       _mErrorFound = true;
-      throw MomentumError(error);
-    }
-    return FutureBuilder<bool>(
-      future: _init(),
-      initialData: false,
-      builder: (context, snapshot) {
-        if (snapshot.data) {
-          return widget.child;
-        }
-        return widget.appLoader ??
-            MaterialApp(
-              theme: ThemeData(
-                primarySwatch: Colors.blue,
-              ),
-              debugShowCheckedModeBanner: false,
-              home: Scaffold(
-                backgroundColor: Colors.white,
-                body: Center(
-                  child: SizedBox(
-                    height: 36,
-                    width: 36,
-                    child: CircularProgressIndicator(),
+      throw MomentumError(_error);
+    } else {
+      return FutureBuilder<bool>(
+        future: _init(),
+        initialData: false,
+        builder: (context, snapshot) {
+          if (snapshot.hasData && snapshot.data) {
+            return widget.child;
+          }
+          return widget.appLoader ??
+              MaterialApp(
+                theme: ThemeData(
+                  primarySwatch: Colors.blue,
+                ),
+                debugShowCheckedModeBanner: false,
+                home: Scaffold(
+                  backgroundColor: Colors.white,
+                  body: Center(
+                    child: SizedBox(
+                      height: 36,
+                      width: 36,
+                      child: CircularProgressIndicator(),
+                    ),
                   ),
                 ),
-              ),
-            );
-      },
-    );
+              );
+        },
+      );
+    }
   }
 }
 
@@ -1113,6 +1252,7 @@ class Momentum extends InheritedWidget {
     int maxTimeTravelSteps,
     bool lazy,
     int minimumBootstrapTime,
+    BootstrapStrategy strategy,
     PersistSaver persistSave,
     PersistGet persistGet,
     bool testMode,
@@ -1132,6 +1272,7 @@ class Momentum extends InheritedWidget {
         lazy: lazy,
         minimumBootstrapTime: minimumBootstrapTime,
         testMode: testMode ?? false,
+        strategy: strategy,
       ),
       controllers: controllers,
       services: services,
@@ -1170,6 +1311,26 @@ class Momentum extends InheritedWidget {
             '"${controller.runtimeType}" is found. You passed '
             'in "$count" instance of "${controller.runtimeType}".'
             '\n\nControllers config:\n\n$passedIn';
+      }
+    }
+    return null;
+  }
+
+  String _validateInjectService(List<MomentumService> services) {
+    var injectedServices = services.where(
+      (s) {
+        return trycatch(() => (s as InjectService)._alias) != null;
+      },
+    ).cast<InjectService>();
+    for (var inject in injectedServices) {
+      var count = injectedServices
+          .where(
+            (x) => x._alias == inject._alias,
+          )
+          .length;
+      if (count > 1) {
+        return '[$Momentum] -> Duplicate alias is found. You passed '
+            'in $count "${inject._alias}"';
       }
     }
     return null;
@@ -1221,17 +1382,54 @@ class Momentum extends InheritedWidget {
   }
 
   /// Method for testing only.
-  T serviceForTest<T extends MomentumService>() {
-    return _getService<T>();
+  T serviceForTest<T extends MomentumService>({dynamic alias}) {
+    return _getService<T>(alias: alias);
   }
 
-  T _getService<T extends MomentumService>() {
+  T _getService<T extends MomentumService>({dynamic alias}) {
     var type = _getType<T>();
-    var service = _services.firstWhere(
-      (c) => c.runtimeType == type,
-      orElse: () => null,
-    );
-    if (service == null) {
+    if (type == _getType<InjectService<MomentumService>>()) {
+      throw _invalidService;
+    }
+    if (type == _getType<InjectService<dynamic>>()) {
+      throw _invalidService;
+    }
+    T result;
+    if (alias == null) {
+      result = _services.firstWhere(
+        (c) => c.runtimeType == type,
+        orElse: () => null,
+      );
+      if (result == null) {
+        var injectors = _services
+            .where(
+              (s) => s.runtimeType == _getType<InjectService<T>>(),
+            )
+            .cast<InjectService>()
+            .toList();
+        if (injectors.isNotEmpty) {
+          result = injectors
+              .firstWhere(
+                (i) => i._service.runtimeType == type,
+              )
+              ?._service;
+        }
+      }
+    } else {
+      var injectors = _services
+          .where(
+            (s) => s.runtimeType == _getType<InjectService<T>>(),
+          )
+          .cast<InjectService>()
+          .toList();
+      result = injectors
+          .firstWhere(
+            (i) => i._alias == alias && i._service.runtimeType == type,
+            orElse: () => null,
+          )
+          ?._service;
+    }
+    if (result == null) {
       if (_testMode && type == _getType<InMemoryStorage>()) {
         return InMemoryStorage() as T;
       }
@@ -1239,7 +1437,7 @@ class Momentum extends InheritedWidget {
           'was not initialized from the "services" parameter '
           'in the Momentum constructor.');
     }
-    return service as T;
+    return result;
   }
 
   T _getControllerOfType<T extends MomentumController>([Type t]) {
@@ -1299,14 +1497,19 @@ class Momentum extends InheritedWidget {
   /// **NOTE:** Please use `Momentum.controller<T>` for consistency.
   /// `Momentum.of<T>` will be deprecated in the future.
   static T of<T extends MomentumController>(BuildContext context) {
-    return _getMomentumInstance(context)._getController<T>();
+    var controller = _getMomentumInstance(context)._getController<T>();
+    if (controller.strategy == BootstrapStrategy.lazyFirstCall) {
+      controller._bootstrap();
+      controller._bootstrapAsync();
+    }
+    return controller;
   }
 
   /// The static method for getting controllers inside a widget.
   /// It uses deprecated method `inheritFromWidgetOfExactType`
   /// to support older versions of flutter.
   static T controller<T extends MomentumController>(BuildContext context) {
-    return _getMomentumInstance(context)._getController<T>();
+    return Momentum.of<T>(context);
   }
 
   /// The static method for getting services inside a widget.
@@ -1322,8 +1525,11 @@ class Momentum extends InheritedWidget {
   /// The static method for getting services inside a widget.
   /// The service must be marked with [MomentumService] and
   /// injected into [Momentum] root widget.
-  static T service<T extends MomentumService>(BuildContext context) {
-    return _getMomentumInstance(context)._getService<T>();
+  static T service<T extends MomentumService>(
+    BuildContext context, {
+    dynamic alias,
+  }) {
+    return _getMomentumInstance(context)._getService<T>(alias: alias);
   }
 
   static T _ofType<T extends MomentumController>(BuildContext context, Type t) {

@@ -1,11 +1,57 @@
+## 1.3.1
+- Fixed event bug where "sendEvent\<T\>()" was only called once but the "listen\<T\>" callback invokes twice.
+- Implemented [Make controllers in momentum builder optional #22](https://github.com/xamantra/momentum/issues/22)
+- Implemented [Add try..catch while initing controllers and services #23](https://github.com/xamantra/momentum/issues/23)
+- Implemented [Add a way (and or option) to allow lazy loading of controller's bootstrapping when called via Momentum.controller<T>() #26](https://github.com/xamantra/momentum/issues/26)
+<hr>
+
+## 1.3.0
+Fixed changelog.md formatting after it got messed up with new pub.dev redesign.
+
+<hr>
+
+## 1.2.9
+Updated changelog.md to follow new pub.dev guidelines.
+
+<hr>
+
+## 1.2.8
+- `Router` now supports parameters.
+  - Updated `Router.goto` and `Router.pop` [docs](https://xamdev.gq/momentum/#/router?id=goto).
+  - New `RouterMixin` [docs](https://xamdev.gq/momentum/#/router_mixin).
+  - Issue reference for this feature: [#16](https://github.com/xamantra/momentum/issues/16).
+- Services now has dependency injection between each other.
+  - New `.getService<T>()` method [docs](https://xamdev.gq/momentum/#/momentum-service?id=getservicelttgt).
+  - Issue reference for this feature: [#19](https://github.com/xamantra/momentum/issues/19)
+- New `InjectService` [class for services](https://xamdev.gq/momentum/#/inject_service).
+- Momentum now initializes services first before anything else.
+  - No breaking changes in existing test files.
+  - No breaking changes in existing example projects.
+  - Refer to [docs](https://xamdev.gq/momentum/#/initialization_order).
+
+**NOTE:** If you encounter a bug with this update, please file an issue immediately on [GitHub](https://github.com/xamantra/momentum/issues).
+
+<hr>
+
+## 1.2.7
+- Added testing guide in official docs: https://xamdev.gq/momentum/#/testing
+
+<hr>
+
 ## 1.2.6
 - improve Momentum.restart function.
+
+<hr>
 
 ## 1.2.5
 - fixed image links in docs
 
+<hr>
+
 ## 1.2.4
 - The `pub.dev` package now excluded `docs/` and `test/` folders to speed up `flutter pub get` for environment with limited internet access.
+
+<hr>
 
 ## 1.2.3
 - Added `testMode` parameter on `Momentum` for easier testing on project level.
@@ -33,7 +79,8 @@
 
 <hr>
 
-## 1.1.9 - Critical
+## 1.1.9
+**Critical**
 - Fixed [#5](https://github.com/xamantra/momentum/issues/5)
 - Improve types system for dependency injection
 - Fix extending controllers that cause bug for `snapshot<T>()`. Click [here](https://xamdev.gq/momentum/#/extending-controllers) for the docs.
@@ -41,7 +88,7 @@
 
 <hr>
 
-## 1.1.8 - Important
+## 1.1.8
 <a href="https://github.com/xamantra/momentum/actions?query=workflow%3ACI" target="_blank"><img src="https://github.com/xamantra/momentum/workflows/CI/badge.svg?event=push" alt="CI" /></a>
 <a href="https://codecov.io/gh/xamantra/momentum"><img src="https://codecov.io/gh/xamantra/momentum/branch/master/graph/badge.svg" /></a>
 
@@ -60,7 +107,7 @@
 
 <hr>
 
-## 1.1.7 - Major Update
+## 1.1.7
 Major changes:
 - Persistent state.
 - Persistent navigation/routing.

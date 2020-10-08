@@ -11,7 +11,9 @@
 - Guides
 
     - [Initialize App](initialize-app.md "Initializing or Bootstrapping your App | Momentum")
+    - [Initialization Order](initialization_order.md "Initialization order of momentum | Momentum")
     - [Asynchronous](asynchronous.md "Asynchronous State Management | Momentum")
+    - [Testing](testing.md "Unit Tests and Widget Tests | Momentum")
     - [Streams](streams.md "Working with Streams | Momentum")
     - [Extending Controllers](extending-controllers.md "How to handle model with multiple controllers | Momentum")
     - [Event System](event-system.md "Event System from Controllers to Widgets | Momentum")
@@ -25,14 +27,16 @@
     - [MomentumController](momentum-controller.md "MomentumController - Holds the logic | Momentum")
     - [MomentumState](momentum-state.md "MomentumState - For event system | Momentum")
     - [MomentumService](momentum-service.md "MomentumService - Services Dependency Injection | Momentum")
+    - [InjectService](inject_service.md "InjectService - Indentical Services Dependency Injection | Momentum")
     - [Router](router.md "Router - For persistent routing | Momentum")
+    - [RouterMixin](router_mixin.md "Router - Handling route parameters | Momentum")
 
 - More
 
-    - [Old README](README.old.md "Old Readme Docs | Momentum")
+    - [Changelog](CHANGELOG.md "Version History | Momentum")
     - [Github](https://github.com/xamantra/momentum)
     - [pub.dev](https://pub.dev/packages/momentum)
     - [VS Code Extension](https://marketplace.visualstudio.com/items?itemName=xamantra.momentum-code)
     - [Listify - Advance Example](https://github.com/xamantra/listify)
-    - [Download Archive](https://storage.googleapis.com/pub-packages/packages/momentum-1.1.9.tar.gz)
-    - [Changelog](CHANGELOG.md "Version History | Momentum")
+    - [Download Latest Version](https://storage.googleapis.com/pub-packages/packages/momentum-1.3.0.tar.gz)
+    - [Old README](README.old.md "Old Readme Docs | Momentum")

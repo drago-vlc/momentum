@@ -124,6 +124,24 @@ If set to `false`, all controllers will be bootstrapped when the app starts.
 
 <hr>
 
+## strategy
+- Category: `Constructor Parameter`
+- Type: `BootstrapStrategy` *[enum]*
+- Default: `BootstrapStrategy.lazyFirstBuild`
+- Required: `NO`
+
+Set the bootstrap behavior for all controllers if lazy mode is `true`.
+  ```dart
+    Momentum(
+      // child: ...,
+      // controllers: [...],
+      // Bootstrap the controllers the first time they are accessed using "Momentum.controller<T>(context)"
+      strategy: BootstrapStrategy.lazyFirstCall,
+    ),
+  ```
+
+<hr>
+
 ## maxTimeTravelSteps
 - Category: `Constructor Parameter`
 - Type: `int`
@@ -265,13 +283,24 @@ Get a specific controller of type `T`. It requires context so you can only call 
 - Parameters: `BuildContext`
 
 Get a specific service of type `T`. It requires context so you can only call this insides widgets.
-  ```dart
-    @override
-    Widget build(BuildContext context) {
-      var exampleService = Momentum.service<ExampleService>(context);
-      return Scaffold(...);
-    }
-  ```
+```dart
+  @override
+  Widget build(BuildContext context) {
+    var exampleService = Momentum.service<ExampleService>(context);
+    return Scaffold(...);
+  }
+```
+If you are using the new `InjectService` to add your services. You can also use the `alias` parameter to get a specific service with matching alias.
+```dart
+  @override
+  Widget build(BuildContext context) {
+    var exampleService = Momentum.service<ExampleService>(context, alias: 'alias1');
+    return Scaffold(...);
+  }
+```
+`alias` is dynamic type which means you can use any values here as long as it matches with the one you want to grab. It is highly recommended to use an `enum`.
+
+Refer to the full documentation for `InjectService` [here](https://xamdev.gq/momentum/#/inject_service).
 
 <hr>
 

@@ -5,6 +5,7 @@ import 'utilities/launcher.dart';
 import 'widgets/router_error_widget.dart';
 import 'widgets/router_exit.dart';
 import 'widgets/router_page_test_pop.dart';
+import 'widgets/router_params.dart';
 import 'widgets/router_test_widget.dart';
 import 'widgets/router_transition.dart';
 
@@ -326,5 +327,65 @@ void main() {
       await tester.pumpAndSettle();
       expect(router.getActive() is PageB, true);
     });
+  });
+
+  testWidgets('Router params test', (tester) async {
+    var widget = routerParamsTest('Router params test');
+    await launch(tester, widget);
+    expect(find.text('RouterParamsTestA'), findsOneWidget);
+    expect(find.text('fail test'), findsNothing);
+    await tester.tap(find.byKey(routerParamsBTestButtonKey));
+    await tester.pumpAndSettle();
+    expect(find.text('RouterParamsTestA'), findsNothing);
+    expect(find.text('Hello World'), findsOneWidget);
+  });
+
+  testWidgets('Router params error test', (tester) async {
+    var widget = routerParamsTest('Router params error test');
+    await launch(tester, widget);
+    expect(find.text('RouterParamsTestA'), findsOneWidget);
+    expect(find.text('fail test'), findsNothing);
+    await tester.tap(find.byKey(routerParamsCTestButtonKey));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isInstanceOf<NoSuchMethodError>());
+    expect(find.text('RouterParamsTestA'), findsNothing);
+    expect(find.text('Hello World'), findsNothing);
+  });
+
+  testWidgets('Router params controller test', (tester) async {
+    var widget = routerParamsTest('Router params controller test');
+    await launch(tester, widget);
+    expect(find.text('RouterParamsTestA'), findsOneWidget);
+    expect(find.text('fail test'), findsNothing);
+    await tester.tap(find.byKey(routerParamsDTestButtonKey));
+    await tester.pumpAndSettle();
+    expect(find.text('RouterParamsTestA'), findsNothing);
+    expect(find.text('Hello World'), findsNothing);
+    expect(find.text('Flutter is awesome!'), findsOneWidget);
+    await tester.tap(find.byKey(routerParamsDErrorButtonKey));
+    await tester.pumpAndSettle();
+    expect(find.text('RouterParamsTestA'), findsNothing);
+    expect(find.text('Hello World'), findsNothing);
+    expect(find.text('12345'), findsOneWidget);
+  });
+
+  testWidgets('Router params pop controller test', (tester) async {
+    var widget = routerParamsTest('Router params pop controller test');
+    await launch(tester, widget);
+    expect(find.text('RouterParamsTestA'), findsOneWidget);
+    expect(find.text('fail test'), findsNothing);
+    await tester.tap(find.byKey(routerParamsDTestButtonKey));
+    await tester.pumpAndSettle();
+    expect(find.text('RouterParamsTestA'), findsNothing);
+    expect(find.text('Hello World'), findsNothing);
+    expect(find.text('Flutter is awesome!'), findsOneWidget);
+    await tester.tap(find.byKey(routerParamsDErrorButtonKey));
+    await tester.pumpAndSettle();
+    expect(find.text('RouterParamsTestA'), findsNothing);
+    expect(find.text('Hello World'), findsNothing);
+    expect(find.text('12345'), findsOneWidget);
+    await tester.tap(find.byKey(routerParamsPopButtonKey));
+    await tester.pumpAndSettle();
+    expect(find.text('789'), findsOneWidget);
   });
 }
